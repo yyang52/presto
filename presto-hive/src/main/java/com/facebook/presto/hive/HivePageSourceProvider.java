@@ -132,10 +132,13 @@ public class HivePageSourceProvider
             SplitContext splitContext)
     {
         HiveTableLayoutHandle hiveLayout = (HiveTableLayoutHandle) layout;
-
+        //System.out.println(hiveLayout.getLayoutString());
         List<HiveColumnHandle> selectedColumns = columns.stream()
                 .map(HiveColumnHandle.class::cast)
                 .collect(toList());
+//        for (HiveColumnHandle i : selectedColumns) {
+//            System.out.println(i.toString() + " " + i.getHiveColumnIndex());
+//        }
 
         HiveSplit hiveSplit = (HiveSplit) split;
         Path path = new Path(hiveSplit.getPath());
@@ -501,6 +504,7 @@ public class HivePageSourceProvider
                         .collect(toList());
 
                 RecordPageSource recordPageSource = new RecordPageSource(columnTypes, hiveRecordCursor);
+
                 if (isPushdownFilterEnabled) {
                     return Optional.of(new FilteringPageSource(
                             columnMappings,

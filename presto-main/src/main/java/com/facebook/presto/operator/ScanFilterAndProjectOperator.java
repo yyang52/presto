@@ -108,6 +108,17 @@ public class ScanFilterAndProjectOperator
         this.pageProcessorMemoryContext = newSimpleAggregatedMemoryContext().newLocalMemoryContext(ScanFilterAndProjectOperator.class.getSimpleName());
         this.outputMemoryContext = operatorContext.newLocalSystemMemoryContext(ScanFilterAndProjectOperator.class.getSimpleName());
         this.dynamicFilterSupplier = requireNonNull(dynamicFilterSupplier, "dynamicFilterSupplier is null");
+        // try to print the mapping...
+//        System.out.println(dynamicFilterSupplier.map(table::withDynamicFilter).orElse(table).toString());
+//        if (!dynamicFilterSupplier.get().get().getDomains().isPresent()) {
+//            System.out.println("empty");
+//        }
+//        else {
+//            for (Map.Entry<ColumnHandle, Domain> entry : dynamicFilterSupplier.get().get().getDomains().get().entrySet()) {
+//                System.out.println("key: " + entry.getKey().toString() + "; value: " + entry.getValue().toString());
+//            }
+//        }
+
         this.mergingOutput = requireNonNull(mergingOutput, "mergingOutput is null");
 
         this.pageBuilder = new PageBuilder(ImmutableList.copyOf(requireNonNull(types, "types is null")));
@@ -229,6 +240,12 @@ public class ScanFilterAndProjectOperator
         }
 
         if (!finishing && pageSource == null && cursor == null) {
+            System.out.println(columns.toString());
+            for (ColumnHandle cl : columns) {
+                System.out.println(cl.toString());
+            }
+            System.out.println(dynamicFilterSupplier.map(table::withDynamicFilter).orElse(table).toString());
+
             ConnectorPageSource source = pageSourceProvider.createPageSource(operatorContext.getSession(), split, dynamicFilterSupplier.map(table::withDynamicFilter).orElse(table), columns);
             if (source instanceof RecordPageSource) {
                 cursor = ((RecordPageSource) source).getCursor();
@@ -252,7 +269,6 @@ public class ScanFilterAndProjectOperator
         if (!finishing && !yieldSignal.isSet()) {
             CursorProcessorOutput output = cursorProcessor.process(operatorContext.getSession().getSqlFunctionProperties(), yieldSignal, cursor, pageBuilder);
             pageSourceMemoryContext.setBytes(cursor.getSystemMemoryUsage());
-
             recordCursorInputStats(output.getProcessedRows());
             if (output.isNoMoreRows()) {
                 finishing = true;
@@ -421,6 +437,7 @@ public class ScanFilterAndProjectOperator
             this.dynamicFilterSupplier = requireNonNull(dynamicFilterSupplier, "dynamicFilterSupplier is null");
             this.minOutputPageSize = requireNonNull(minOutputPageSize, "minOutputPageSize is null");
             this.minOutputPageRowCount = minOutputPageRowCount;
+            System.out.println(minOutputPageRowCount);
         }
 
         @Override

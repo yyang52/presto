@@ -13,14 +13,11 @@
  */
 package com.facebook.presto.orc;
 
-// import com.facebook.presto.common.block.Block;
-
 public class OrcReaderJNI
 {
     public static final String LibraryName = "orc_jni";
 
     static {
-        //NativeLibraryLoader.load(LibraryName);
         System.loadLibrary(LibraryName);
     }
 

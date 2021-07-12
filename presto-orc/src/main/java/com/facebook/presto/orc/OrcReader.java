@@ -341,7 +341,9 @@ public class OrcReader
             boolean legacyMapSubscript,
             OrcAggregatedMemoryContext systemMemoryUsage,
             Optional<OrcWriteValidation> writeValidation,
-            int initialBatchSize)
+            int initialBatchSize,
+            String subQuery,
+            String tableColumns)
     {
         return new OrcSelectiveRecordReader(
                 includedColumns,
@@ -376,7 +378,9 @@ public class OrcReader
                 writeValidation,
                 initialBatchSize,
                 stripeMetadataSource,
-                cacheable);
+                cacheable,
+                subQuery,
+                tableColumns);
     }
 
     private static OrcDataSource wrapWithCacheIfTiny(OrcDataSource dataSource, DataSize maxCacheSize, OrcAggregatedMemoryContext systemMemoryContext)

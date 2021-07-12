@@ -40,7 +40,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.util.Objects.requireNonNull;
 
-public final class HiveTableLayoutHandle
+public class HiveTableLayoutHandle
         implements ConnectorTableLayoutHandle
 {
     private final SchemaTableName schemaTableName;
@@ -58,6 +58,8 @@ public final class HiveTableLayoutHandle
     private final String layoutString;
     private final Optional<Set<HiveColumnHandle>> requestedColumns;
     private final boolean partialAggregationsPushedDown;
+    private String subQuery;
+    private String tableColumns;
 
     // coordinator-only properties
     @Nullable
@@ -79,7 +81,9 @@ public final class HiveTableLayoutHandle
             @JsonProperty("pushdownFilterEnabled") boolean pushdownFilterEnabled,
             @JsonProperty("layoutString") String layoutString,
             @JsonProperty("requestedColumns") Optional<Set<HiveColumnHandle>> requestedColumns,
-            @JsonProperty("partialAggregationsPushedDown") boolean partialAggregationsPushedDown)
+            @JsonProperty("partialAggregationsPushedDown") boolean partialAggregationsPushedDown,
+            @JsonProperty("subQuery") String subQuery,
+            @JsonProperty("tableColumns") String tableColumns)
     {
         this.schemaTableName = requireNonNull(schemaTableName, "table is null");
         this.tablePath = requireNonNull(tablePath, "tablePath is null");
@@ -97,6 +101,8 @@ public final class HiveTableLayoutHandle
         this.layoutString = requireNonNull(layoutString, "layoutString is null");
         this.requestedColumns = requireNonNull(requestedColumns, "requestedColumns is null");
         this.partialAggregationsPushedDown = partialAggregationsPushedDown;
+        this.subQuery = subQuery;
+        this.tableColumns = tableColumns;
     }
 
     public HiveTableLayoutHandle(
@@ -115,7 +121,9 @@ public final class HiveTableLayoutHandle
             boolean pushdownFilterEnabled,
             String layoutString,
             Optional<Set<HiveColumnHandle>> requestedColumns,
-            boolean partialAggregationsPushedDown)
+            boolean partialAggregationsPushedDown,
+            String subQuery,
+            String tableColumns)
     {
         this.schemaTableName = requireNonNull(schemaTableName, "table is null");
         this.tablePath = requireNonNull(tablePath, "tablePath is null");
@@ -133,6 +141,30 @@ public final class HiveTableLayoutHandle
         this.layoutString = requireNonNull(layoutString, "layoutString is null");
         this.requestedColumns = requireNonNull(requestedColumns, "requestedColumns is null");
         this.partialAggregationsPushedDown = partialAggregationsPushedDown;
+        this.subQuery = subQuery;
+        this.tableColumns = tableColumns;
+    }
+
+    @JsonProperty
+    public String getSubQuery()
+    {
+        return subQuery;
+    }
+
+    @JsonProperty
+    public String getTableColumns()
+    {
+        return tableColumns;
+    }
+
+    public void setSubQuery(String subQuery)
+    {
+        this.subQuery = subQuery;
+    }
+
+    public void setTableColumns(String tableColumns)
+    {
+        this.tableColumns = tableColumns;
     }
 
     @JsonProperty

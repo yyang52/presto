@@ -316,7 +316,8 @@ public class HivePageSourceProvider
                     optimizedRemainingPredicate,
                     hiveStorageTimeZone,
                     new HiveFileContext(splitContext.isCacheable(), cacheQuota, split.getExtraFileInfo().map(BinaryExtraHiveFileInfo::new), Optional.of(split.getFileSize())),
-                    encryptionInformation);
+                    encryptionInformation,
+                    layout);
             if (pageSource.isPresent()) {
                 return Optional.of(pageSource.get());
             }

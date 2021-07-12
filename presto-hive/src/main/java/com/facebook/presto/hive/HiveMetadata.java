@@ -2612,7 +2612,9 @@ public class HiveMetadata
                                 false,
                                 createTableLayoutString(session, handle.getSchemaTableName(), hivePartitionResult.getBucketHandle(), hivePartitionResult.getBucketFilter(), TRUE_CONSTANT, domainPredicate),
                                 desiredColumns.map(columns -> columns.stream().map(column -> (HiveColumnHandle) column).collect(toImmutableSet())),
-                                false)),
+                                false,
+                                "",
+                                "")),
                 hivePartitionResult.getUnenforcedConstraint()));
     }
 
@@ -2851,7 +2853,9 @@ public class HiveMetadata
                 hiveLayoutHandle.isPushdownFilterEnabled(),
                 hiveLayoutHandle.getLayoutString(),
                 hiveLayoutHandle.getRequestedColumns(),
-                hiveLayoutHandle.isPartialAggregationsPushedDown());
+                hiveLayoutHandle.isPartialAggregationsPushedDown(),
+                "",
+                "");
     }
 
     @Override

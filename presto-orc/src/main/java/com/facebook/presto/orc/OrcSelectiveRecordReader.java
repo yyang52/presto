@@ -145,6 +145,8 @@ public class OrcSelectiveRecordReader
 
     private int readPositions;
 
+    private final long jniPtr = 0;
+
     public OrcSelectiveRecordReader(
             Map<Integer, Type> includedColumns,                 // key: hiveColumnIndex
             List<Integer> outputColumns,                        // elements are hive column indices
@@ -178,7 +180,9 @@ public class OrcSelectiveRecordReader
             Optional<OrcWriteValidation> writeValidation,
             int initialBatchSize,
             StripeMetadataSource stripeMetadataSource,
-            boolean cacheable)
+            boolean cacheable,
+            String subQuery,
+            String tableColumns)
     {
         super(includedColumns,
                 requiredSubfields,
@@ -220,7 +224,9 @@ public class OrcSelectiveRecordReader
                 writeValidation,
                 initialBatchSize,
                 stripeMetadataSource,
-                cacheable);
+                cacheable,
+                subQuery,
+                tableColumns);
 
         // Hive column indices can't be used to index into arrays because they are negative
         // for partition and hidden columns. Hence, we create synthetic zero-based indices.
@@ -253,6 +259,7 @@ public class OrcSelectiveRecordReader
             this.coercers[zeroBasedIndices.get(entry.getKey())] = entry.getValue();
         }
 
+//        this.jniPtr = CiderJNI.init();
         requireNonNull(constantValues, "constantValues is null");
         this.constantValues = new Object[this.hiveColumnIndices.length];
         for (int columnIndex : includedColumns.keySet()) {
@@ -735,6 +742,9 @@ public class OrcSelectiveRecordReader
         Page page = new Page(positionCount, blocks);
 
         validateWritePageChecksum(page);
+        page.setSubQuery(this.getSubQuery());
+        page.setTableColumns(this.getTableColumns());
+        page.setJniPtr(jniPtr);
 
         return page;
     }

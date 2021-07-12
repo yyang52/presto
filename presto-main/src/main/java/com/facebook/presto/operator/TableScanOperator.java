@@ -14,6 +14,9 @@
 package com.facebook.presto.operator;
 
 import com.facebook.presto.common.Page;
+import com.facebook.presto.common.block.Block;
+import com.facebook.presto.common.block.IntArrayBlock;
+import com.facebook.presto.common.block.LongArrayBlock;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.facebook.presto.metadata.Split;
 import com.facebook.presto.spi.ColumnHandle;
@@ -24,14 +27,22 @@ import com.facebook.presto.spi.plan.PlanNodeId;
 import com.facebook.presto.split.EmptySplit;
 import com.facebook.presto.split.EmptySplitPageSource;
 import com.facebook.presto.split.PageSourceProvider;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
+import com.mapd.CiderJNI;
+import sun.misc.Unsafe;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -251,8 +262,17 @@ public class TableScanOperator
 
         Page page = source.getNextPage();
         if (page != null) {
+            String subQuery = page.getSubQuery();
+            String tableColumns = page.getTableColumns();
+            long jniPtr = page.getJniPtr();
             // assure the page is in memory before handing to another operator
             page = page.getLoadedPage();
+            if (table.getConnectorId().getCatalogName().equals("hive")) {
+                // FIXME: need to merge with Yan's part
+//                String tableColumn = ""; // {"columns":[{"a":"int"},{"b":"long"}]}
+//                String subQuery = ""; // json representation of query
+                page = getOutputFromCider(page, subQuery, tableColumns);
+            }
 
             // update operator stats
             recordInputStats();
@@ -262,6 +282,151 @@ public class TableScanOperator
         systemMemoryContext.setBytes(source.getSystemMemoryUsage());
 
         return page;
+    }
+
+    private Page getOutputFromCider(Page page, String subQuery, String tableColumn)
+    {
+        int positionCount = page.getPositionCount();
+        int count = page.getChannelCount();
+
+        // FIXED
+        int resultCount = columns.size();
+        long[] dataBuffers = new long[count];
+        long[] dataNulls = new long[count];
+        long[] resultBuffers = new long[resultCount];
+        long[] resultNulls = new long[resultCount];
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode node = null;
+        try {
+            node = mapper.readTree(tableColumn);
+        }
+        catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+        JsonNode columnArrays = node.get("Columns");
+        Iterator<JsonNode> nodes = columnArrays.elements();
+        List<String> list = new ArrayList<>();
+        while (nodes.hasNext()) {
+            JsonNode next = nodes.next();
+            Iterator<String> keys = next.fieldNames();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                String value = next.get(key).textValue();
+                list.add(value);
+            }
+        }
+
+        Page output = null;
+        long ptr = CiderJNI.init();
+        try {
+            Unsafe unsafe = getUnsafe();
+            for (int i = 0; i < count; i++) {
+                if (list.get(i).equals("INT")) {
+                    int[] inputBuffer = ((IntArrayBlock) page.getBlock(i)).values;
+                    long nullPtr = unsafe.allocateMemory(positionCount);
+                    long bufferPtr = unsafe.allocateMemory(positionCount * 4);
+                    for (int idx = 0; idx < inputBuffer.length; idx++) {
+                        unsafe.putInt(bufferPtr + idx * 4, inputBuffer[idx]);
+                    }
+                    dataBuffers[i] = bufferPtr;
+                    dataNulls[i] = nullPtr;
+                }
+                else if (list.get(i).equals("LONG")) {
+                    long[] inputBuffer = ((LongArrayBlock) page.getBlock(i)).values;
+                    long nullPtr = unsafe.allocateMemory(positionCount);
+                    long bufferPtr = unsafe.allocateMemory(positionCount * 8);
+                    for (int idx = 0; idx < inputBuffer.length; idx++) {
+                        unsafe.putLong(bufferPtr + idx * 8, inputBuffer[idx]);
+                    }
+                    dataBuffers[i] = bufferPtr;
+                    dataNulls[i] = nullPtr;
+                }
+            }
+
+            for (int i = 0; i < resultCount; i++) {
+                // FIXME: hardcode now
+                String type = "INT";
+                int step = 0;
+                switch (type) {
+                    case "INT":
+                        step = 4;
+                        break;
+                    case "LONG":
+                        step = 8;
+                        break;
+                }
+                long nullPtr = unsafe.allocateMemory(positionCount);
+                long bufferPtr = unsafe.allocateMemory(positionCount * step);
+                resultBuffers[i] = bufferPtr;
+                resultNulls[i] = nullPtr;
+            }
+
+            int resultSize = CiderJNI.processBlocks(
+                    ptr,
+                    subQuery,
+                    tableColumn,
+                    dataBuffers,
+                    dataNulls,
+                    resultBuffers,
+                    resultNulls,
+                    positionCount);
+
+            Block[] outputBlocks = new Block[resultCount];
+            for (int i = 0; i < resultCount; i++) {
+                String type = list.get(i);
+                int step = 0;
+                switch (type) {
+                    case "INT":
+                        step = 4;
+                        break;
+                    case "LONG":
+                        step = 8;
+                        break;
+                }
+                long nullPtr = resultNulls[i];
+                long resultPtr = resultBuffers[i];
+                int index = 0;
+                if (type.equals("INT")) {
+                    int[] outputBuffer = new int[resultSize];
+                    for (int idx = 0; idx < positionCount; idx++) {
+                        // FIXME: need to confirm how nullPtr is represented
+                        if (unsafe.getByte(nullPtr + idx) == 0x01) {
+                            outputBuffer[index++] = unsafe.getInt(resultPtr + idx * step);
+                        }
+                    }
+                    outputBlocks[i] = new IntArrayBlock(resultSize, Optional.empty(), outputBuffer);
+                }
+                else if (type.equals("LONG")) {
+                    long[] outputBuffer = new long[resultSize];
+                    for (int idx = 0; idx < positionCount; idx++) {
+                        if (unsafe.getByte(nullPtr + idx) == 0x01) {
+                            outputBuffer[index++] = unsafe.getLong(resultPtr + idx * step);
+                        }
+                    }
+                    outputBlocks[i] = new LongArrayBlock(resultSize, Optional.empty(), outputBuffer);
+                }
+            }
+
+            output = new Page(resultSize, outputBlocks);
+        }
+        catch (NoSuchFieldException e) {
+            e.printStackTrace();
+        }
+        catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
+
+        CiderJNI.close(ptr);
+        return output;
+    }
+
+    private static Unsafe getUnsafe() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException
+    {
+        Field f = Unsafe.class.getDeclaredField("theUnsafe");
+        f.setAccessible(true);
+        Unsafe unsafe = (Unsafe) f.get(null);
+        return unsafe;
     }
 
     private void recordInputStats()
@@ -275,6 +440,7 @@ public class TableScanOperator
         long positionCount = endCompletedPositions - completedPositions;
         operatorContext.recordProcessedInput(inputBytes, positionCount);
         operatorContext.recordRawInputWithTiming(inputBytes, positionCount, endReadTimeNanos - readTimeNanos);
+//        operatorContext.updateStats(source.getRuntimeStats());
         completedBytes = endCompletedBytes;
         completedPositions = endCompletedPositions;
         readTimeNanos = endReadTimeNanos;

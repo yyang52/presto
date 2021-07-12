@@ -132,6 +132,7 @@ public class HivePageSourceProvider
             SplitContext splitContext)
     {
         HiveTableLayoutHandle hiveLayout = (HiveTableLayoutHandle) layout;
+
         List<HiveColumnHandle> selectedColumns = columns.stream()
                 .map(HiveColumnHandle.class::cast)
                 .collect(toList());

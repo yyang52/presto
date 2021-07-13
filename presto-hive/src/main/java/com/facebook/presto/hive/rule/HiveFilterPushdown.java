@@ -54,6 +54,7 @@ import com.facebook.presto.spi.plan.FilterNode;
 import com.facebook.presto.spi.plan.PlanNode;
 import com.facebook.presto.spi.plan.PlanNodeIdAllocator;
 import com.facebook.presto.spi.plan.PlanVisitor;
+import com.facebook.presto.spi.plan.ProjectNode;
 import com.facebook.presto.spi.plan.TableScanNode;
 import com.facebook.presto.spi.plan.ValuesNode;
 import com.facebook.presto.spi.relation.ConstantExpression;
@@ -125,6 +126,7 @@ public class HiveFilterPushdown
     protected final StandardFunctionResolution functionResolution;
     protected final HivePartitionManager partitionManager;
     protected final FunctionMetadataManager functionMetadataManager;
+    protected PlanNode maxSubPlan;
 
     public HiveFilterPushdown(
             HiveTransactionManager transactionManager,
@@ -143,6 +145,7 @@ public class HiveFilterPushdown
     @Override
     public PlanNode optimize(PlanNode maxSubplan, ConnectorSession session, VariableAllocator variableAllocator, PlanNodeIdAllocator idAllocator)
     {
+        this.maxSubPlan = maxSubplan;
         return maxSubplan.accept(new Visitor(session, idAllocator), null);
     }
 
@@ -398,7 +401,8 @@ public class HiveFilterPushdown
             if (!TRUE_CONSTANT.equals(unenforcedFilter)) {
                 return new FilterNode(idAllocator.getNextId(), node, replaceExpression(unenforcedFilter, symbolToColumnMapping.inverse()));
             }
-
+            String jsonString = HiveFilterPushdownDelegation.toJson((ProjectNode) maxSubPlan, pushdownFilterResult);
+            System.out.println(jsonString);
             return node;
         }
 
@@ -419,7 +423,6 @@ public class HiveFilterPushdown
             if (pushdownFilterResult.getLayout().getPredicate().isNone()) {
                 return new ValuesNode(idAllocator.getNextId(), tableScan.getOutputVariables(), ImmutableList.of());
             }
-
             return new TableScanNode(
                     tableScan.getId(),
                     new TableHandle(handle.getConnectorId(), handle.getConnectorHandle(), handle.getTransaction(), Optional.of(pushdownFilterResult.getLayout().getHandle())),

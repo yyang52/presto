@@ -14,6 +14,7 @@
 package com.facebook.presto.operator;
 
 import com.facebook.presto.common.Page;
+import com.facebook.presto.common.block.IntArrayBlock;
 import com.facebook.presto.memory.context.LocalMemoryContext;
 import com.facebook.presto.metadata.Split;
 import com.facebook.presto.spi.ColumnHandle;
@@ -28,10 +29,13 @@ import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
+import com.mapd.CiderJNI;
+import sun.misc.Unsafe;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -254,6 +258,57 @@ public class TableScanOperator
             // assure the page is in memory before handing to another operator
             page = page.getLoadedPage();
 
+            int positionCount = page.getPositionCount();
+            int count = page.getChannelCount();
+
+            // FIXME: hardcode now
+            int resultCount = 1;
+            long[] dataBuffers = new long[count];
+            long[] dataNulls = new long[count];
+            long[] resultBuffers = new long[resultCount];
+            long[] resultNulls = new long[resultCount];
+
+            try {
+                Unsafe unsafe = getUnsafe();
+                for (int i = 0; i < count; i++) {
+                    if (page.getBlock(i) instanceof IntArrayBlock) {
+                        int[] inputBuffer = ((IntArrayBlock) page.getBlock(i)).values;
+                        long nullPtr = unsafe.allocateMemory(positionCount);
+                        long bufferPtr = unsafe.allocateMemory(positionCount * 4);
+                        for (int idx = 0; idx < inputBuffer.length; idx++) {
+                            unsafe.putInt(bufferPtr + idx * 4, inputBuffer[idx]);
+                        }
+                        dataBuffers[i] = bufferPtr;
+                        dataNulls[i] = nullPtr;
+                    }
+                }
+
+                for (int i = 0; i < resultCount; i++) {
+                    if (page.getBlock(i) instanceof IntArrayBlock) {
+                        long nullPtr = unsafe.allocateMemory(positionCount);
+                        long bufferPtr = unsafe.allocateMemory(positionCount * 4);
+                        resultBuffers[i] = bufferPtr;
+                        resultNulls[i] = nullPtr;
+                    }
+                }
+
+                CiderJNI.processBlocks(
+                        "select a from test where b > 12;",
+                        "schema",
+                        dataBuffers,
+                        dataNulls,
+                        resultBuffers,
+                        resultNulls,
+                        positionCount);
+
+            }
+            catch (NoSuchFieldException e) {
+                e.printStackTrace();
+            }
+            catch (IllegalAccessException e) {
+                e.printStackTrace();
+            }
+
             // update operator stats
             recordInputStats();
         }
@@ -262,6 +317,14 @@ public class TableScanOperator
         systemMemoryContext.setBytes(source.getSystemMemoryUsage());
 
         return page;
+    }
+
+    private static Unsafe getUnsafe() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException
+    {
+        Field f = Unsafe.class.getDeclaredField("theUnsafe");
+        f.setAccessible(true);
+        Unsafe unsafe = (Unsafe) f.get(null);
+        return unsafe;
     }
 
     private void recordInputStats()

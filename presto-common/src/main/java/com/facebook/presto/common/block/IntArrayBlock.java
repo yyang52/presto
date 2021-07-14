@@ -42,7 +42,7 @@ public class IntArrayBlock
     private final int positionCount;
     @Nullable
     private final boolean[] valueIsNull;
-    private final int[] values;
+    public final int[] values;
 
     private final long sizeInBytes;
     private final long retainedSizeInBytes;

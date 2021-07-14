@@ -732,10 +732,6 @@ public class OrcSelectiveRecordReader
             }
         }
 
-        // int ret = jni.xxx()
-        int ret = OrcReaderJNI.processBlocks(System.identityHashCode(blocks), positionCount);
-        System.out.println(ret);
-
         Page page = new Page(positionCount, blocks);
 
         validateWritePageChecksum(page);

@@ -62,6 +62,7 @@ abstract class AbstractLongSelectiveStreamReader
 
     protected AbstractLongSelectiveStreamReader(Optional<Type> outputType)
     {
+        // FIXME
         this.outputRequired = true;
 //        this.outputRequired = requireNonNull(outputType, "outputType is null").isPresent();
         this.outputType = outputType.orElse(null);

@@ -260,6 +260,8 @@ public class TableScanOperator
 
             int positionCount = page.getPositionCount();
             int count = page.getChannelCount();
+
+            // FIXME: hardcode now
             int resultCount = 1;
             long[] dataBuffers = new long[count];
             long[] dataNulls = new long[count];

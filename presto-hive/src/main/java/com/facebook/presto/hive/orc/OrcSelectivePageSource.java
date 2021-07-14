@@ -98,7 +98,7 @@ public class OrcSelectivePageSource
             closeWithSuppression(e);
             throw new PrestoException(HIVE_BAD_DATA, e);
         }
-        catch (RuntimeException | IOException e) {
+        catch (IOException | RuntimeException e) {
             closeWithSuppression(e);
             throw new PrestoException(HIVE_CURSOR_ERROR, format("Failed to read ORC file: %s", orcDataSource.getId()), e);
         }

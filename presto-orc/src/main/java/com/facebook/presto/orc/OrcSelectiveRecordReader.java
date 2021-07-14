@@ -731,7 +731,7 @@ public class OrcSelectiveRecordReader
                 blocks[i] = block;
             }
         }
-        System.out.println(System.getProperty("java.library.path"));
+
         // int ret = jni.xxx()
         int ret = OrcReaderJNI.processBlocks(System.identityHashCode(blocks), positionCount);
         System.out.println(ret);

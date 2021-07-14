@@ -16,10 +16,7 @@ package com.facebook.presto.hive.orc;
 import com.facebook.presto.common.InvalidFunctionArgumentException;
 import com.facebook.presto.common.Page;
 import com.facebook.presto.hive.FileFormatDataSourceStats;
-import com.facebook.presto.orc.OrcAggregatedMemoryContext;
-import com.facebook.presto.orc.OrcCorruptionException;
-import com.facebook.presto.orc.OrcDataSource;
-import com.facebook.presto.orc.OrcSelectiveRecordReader;
+import com.facebook.presto.orc.*;
 import com.facebook.presto.spi.ConnectorPageSource;
 import com.facebook.presto.spi.PrestoException;
 
@@ -101,7 +98,7 @@ public class OrcSelectivePageSource
             closeWithSuppression(e);
             throw new PrestoException(HIVE_BAD_DATA, e);
         }
-        catch (IOException | RuntimeException e) {
+        catch (RuntimeException | IOException e) {
             closeWithSuppression(e);
             throw new PrestoException(HIVE_CURSOR_ERROR, format("Failed to read ORC file: %s", orcDataSource.getId()), e);
         }

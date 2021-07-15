@@ -27,6 +27,7 @@ import com.facebook.presto.hive.HiveColumnHandle;
 import com.facebook.presto.hive.HiveDwrfEncryptionProvider;
 import com.facebook.presto.hive.HiveFileContext;
 import com.facebook.presto.hive.HiveSelectivePageSourceFactory;
+import com.facebook.presto.hive.HiveTableLayoutHandle;
 import com.facebook.presto.hive.metastore.Storage;
 import com.facebook.presto.orc.DwrfEncryptionProvider;
 import com.facebook.presto.orc.StripeMetadataSource;
@@ -109,7 +110,8 @@ public class DwrfSelectivePageSourceFactory
             RowExpression remainingPredicate,
             DateTimeZone hiveStorageTimeZone,
             HiveFileContext hiveFileContext,
-            Optional<EncryptionInformation> encryptionInformation)
+            Optional<EncryptionInformation> encryptionInformation,
+            HiveTableLayoutHandle layout)
     {
         if (!OrcSerde.class.getName().equals(storage.getStorageFormat().getSerDe())) {
             return Optional.empty();
@@ -148,6 +150,7 @@ public class DwrfSelectivePageSourceFactory
                 hiveFileContext,
                 tupleDomainFilterCache,
                 encryptionInformation,
-                dwrfEncryptionProvider));
+                dwrfEncryptionProvider,
+                layout));
     }
 }

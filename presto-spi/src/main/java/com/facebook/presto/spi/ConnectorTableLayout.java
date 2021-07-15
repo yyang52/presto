@@ -25,7 +25,7 @@ import static java.util.Objects.requireNonNull;
 
 public class ConnectorTableLayout
 {
-    private final ConnectorTableLayoutHandle handle;
+    private ConnectorTableLayoutHandle handle;
     private final Optional<List<ColumnHandle>> columns;
     private final TupleDomain<ColumnHandle> predicate;
     private final Optional<ConnectorTablePartitioning> tablePartitioning;

@@ -309,7 +309,9 @@ public class BenchmarkSelectiveStreamReaders
                     true,
                     new TestingHiveOrcAggregatedMemoryContext(),
                     Optional.empty(),
-                    INITIAL_BATCH_SIZE);
+                    INITIAL_BATCH_SIZE,
+                    "",
+                    "");
         }
 
         private Optional<TupleDomainFilter> getFilter(Type type, float filterRate, boolean filterAllowNull, float selectionRateForNonNull)

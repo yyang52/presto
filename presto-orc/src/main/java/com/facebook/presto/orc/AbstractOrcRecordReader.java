@@ -149,7 +149,9 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
             Optional<OrcWriteValidation> writeValidation,
             int initialBatchSize,
             StripeMetadataSource stripeMetadataSource,
-            boolean cacheable)
+            boolean cacheable,
+            String subQuery,
+            String tableColumns)
     {
         requireNonNull(includedColumns, "includedColumns is null");
         requireNonNull(predicate, "predicate is null");

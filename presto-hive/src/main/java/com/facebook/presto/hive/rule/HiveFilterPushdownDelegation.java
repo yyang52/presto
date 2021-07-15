@@ -17,7 +17,6 @@ import com.facebook.presto.hive.HiveColumnHandle;
 import com.facebook.presto.hive.HiveTableLayoutHandle;
 import com.facebook.presto.hive.metastore.Column;
 import com.facebook.presto.spi.ColumnHandle;
-import com.facebook.presto.spi.ConnectorTableLayout;
 import com.facebook.presto.spi.plan.FilterNode;
 import com.facebook.presto.spi.plan.ProjectNode;
 import com.facebook.presto.spi.plan.TableScanNode;
@@ -38,13 +37,11 @@ public final class HiveFilterPushdownDelegation
 {
     private HiveFilterPushdownDelegation() {}
     public static String toJson(ProjectNode projectNode,
-                                HiveFilterPushdown.ConnectorPushdownFilterResult pushdownFilterResult)
+                                HiveTableLayoutHandle hiveTableLayoutHandle)
     {
         FilterNode filterNode = (FilterNode) projectNode.getSource();
         // construct tableScan JSON node
         TableScanNode tableScanNode = (TableScanNode) filterNode.getSource();
-        ConnectorTableLayout layout = pushdownFilterResult.getLayout();
-        HiveTableLayoutHandle hiveTableLayoutHandle = (HiveTableLayoutHandle) layout.getHandle();
         // all columns <name, hiveType>
         List<Column> dataColumns = hiveTableLayoutHandle.getDataColumns();
         ObjectMapper objectMapper = new ObjectMapper();
@@ -55,13 +52,15 @@ public final class HiveFilterPushdownDelegation
         for (Column column : dataColumns) {
             fieldsNode.add(column.getName());
         }
-        tableScanJsonNode.set("feildNames", fieldsNode);
+        tableScanJsonNode.set("fieldNames", fieldsNode);
         ArrayNode tableNode = objectMapper.createArrayNode();
         String schemaName = hiveTableLayoutHandle.getSchemaTableName().getSchemaName();
         String tableName = hiveTableLayoutHandle.getSchemaTableName().getTableName();
         tableNode.add(schemaName);
         tableNode.add(tableName);
         tableScanJsonNode.set("table", tableNode);
+        ArrayNode inputNode = objectMapper.createArrayNode();
+        tableScanJsonNode.set("inputs", inputNode);
         ArrayNode relsNode = objectMapper.createArrayNode();
         relsNode.add(tableScanJsonNode);
         relsNode.add(getJsonFilterNode(filterNode));
@@ -80,7 +79,7 @@ public final class HiveFilterPushdownDelegation
         ObjectNode conditionNode = objectMapper.createObjectNode();
         if (filterNode.getPredicate() instanceof CallExpression) {
             CallExpression expression = (CallExpression) filterNode.getPredicate();
-            conditionNode.put("Op", expression.getDisplayName());
+            conditionNode.put("op", matchOperator(expression.getDisplayName()));
             ArrayNode operandsNode = objectMapper.createArrayNode();
             ObjectNode operandsFeilds = objectMapper.createObjectNode();
             List<RowExpression> arguments = expression.getArguments();
@@ -102,8 +101,12 @@ public final class HiveFilterPushdownDelegation
                     operandsNode.add(operandsInput);
                     String type = hiveColumnHandle.getHiveType().toString();
                     String targetType = hiveColumnHandle.getTypeSignature().toString();
-                    operandsFeilds.put("type", type);
-                    operandsFeilds.put("target_type", targetType);
+                    operandsFeilds.put("type", matchType(type));
+                    operandsFeilds.put("target_type", matchType(targetType));
+                    operandsFeilds.put("scale", "0");
+                    operandsFeilds.put("precision", "10");
+                    operandsFeilds.put("type_scale", "0");
+                    operandsFeilds.put("type_precision", "10");
                     operandsNode.add(operandsFeilds);
                 }
             }
@@ -115,6 +118,25 @@ public final class HiveFilterPushdownDelegation
         }
         objectNode.set("condition", conditionNode);
         return objectNode;
+    }
+
+    private static String matchOperator(String originOperator)
+    {
+        switch (originOperator) {
+            case "EQUAL": return "=";
+        }
+        return originOperator;
+    }
+
+    private static String matchType(String type)
+    {
+        switch (type) {
+            case "int":
+            case "integer":
+            case "Int":
+                return "Integer";
+        }
+        return type;
     }
 
     private static JsonNode getJsonProjectNode(ProjectNode projectNode)
@@ -136,6 +158,21 @@ public final class HiveFilterPushdownDelegation
         }
         objectNode.set("exprs", exprsFeilds);
         return objectNode;
+    }
+
+    public static String toJson(HiveTableLayoutHandle hiveTableLayoutHandle)
+    {
+        List<Column> dataColumns = hiveTableLayoutHandle.getDataColumns();
+        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectNode objectNode = objectMapper.createObjectNode();
+        ArrayNode columns = objectMapper.createArrayNode();
+        for (Column column : dataColumns) {
+            ObjectNode singleColumn = objectMapper.createObjectNode();
+            singleColumn.put(column.getName(), column.getType().toString().toUpperCase());
+            columns.add(singleColumn);
+        }
+        objectNode.set("columns", columns);
+        return objectNode.toString();
     }
 
     private static HiveColumnHandle getColumnHandle(VariableReferenceExpression expression,

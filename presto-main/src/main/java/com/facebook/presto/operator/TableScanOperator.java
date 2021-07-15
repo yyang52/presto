@@ -300,7 +300,6 @@ public class TableScanOperator
                         resultBuffers,
                         resultNulls,
                         positionCount);
-
             }
             catch (NoSuchFieldException e) {
                 e.printStackTrace();

@@ -29,6 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -83,19 +84,27 @@ public final class HiveFilterPushdownDelegation
             ArrayNode operandsNode = objectMapper.createArrayNode();
             ObjectNode operandsFeilds = objectMapper.createObjectNode();
             List<RowExpression> arguments = expression.getArguments();
+            int dScale = 0;
+            int dPrecision = 0;
             for (RowExpression rowExpression : arguments) {
                 if (rowExpression instanceof ConstantExpression) {
                     String type = rowExpression.getType().toString();
+                    // constant will be taken as DECIMAL
                     switch (type) {
                         case "integer" :
-                            int intLiteral =
-                                    Integer.parseInt(((ConstantExpression) rowExpression).getValue().toString());
-                            operandsFeilds.put("literal", intLiteral);
                         case "double" :
                             double doubleLiteral =
                                     Double.parseDouble(((ConstantExpression) rowExpression).getValue().toString());
-                            operandsFeilds.put("literal", doubleLiteral);
+                            BigDecimal decimalLiteral = new BigDecimal(doubleLiteral);
+                            dScale = decimalLiteral.scale();
+                            dPrecision = decimalLiteral.precision();
+                            int finalLiteral = getIntLiteral(dScale, doubleLiteral);
+                            operandsFeilds.put("literal", finalLiteral);
                     }
+                    // no matter integer or double, will convert the constant to DECIMAL
+                    operandsFeilds.put("type", "DECIMAL");
+                    operandsFeilds.put("scale", dScale);
+                    operandsFeilds.put("precision", dPrecision);
                 }
                 if (rowExpression instanceof VariableReferenceExpression) {
                     // get columnIndex, hiveType, typeName from TableScanNode.assignments
@@ -107,17 +116,13 @@ public final class HiveFilterPushdownDelegation
                     // column index
                     operandsInput.put("input", columnIndex);
                     operandsNode.add(operandsInput);
-                    String type = hiveColumnHandle.getHiveType().toString();
                     String targetType = hiveColumnHandle.getTypeSignature().toString();
-                    operandsFeilds.put("type", matchType(type).toUpperCase());
                     operandsFeilds.put("target_type", matchType(targetType).toUpperCase());
-                    operandsFeilds.put("scale", getTypeScale(type));
-                    operandsFeilds.put("precision", getTypePrecision(type));
                     operandsFeilds.put("type_scale", getTypeScale(targetType));
                     operandsFeilds.put("type_precision", getTypePrecision(targetType));
-                    operandsNode.add(operandsFeilds);
                 }
             }
+            operandsNode.add(operandsFeilds);
             ObjectNode typeFieldsNode = objectMapper.createObjectNode();
             typeFieldsNode.put("type", expression.getType().toString().toUpperCase());
             typeFieldsNode.put("nullable", true);
@@ -128,6 +133,14 @@ public final class HiveFilterPushdownDelegation
         return objectNode;
     }
 
+    private static int getIntLiteral(int scale, double literal)
+    {
+        while (scale >= 1) {
+            literal = literal * 10;
+            scale--;
+        }
+        return (int) scale;
+    }
     private static String matchOperator(String originOperator)
     {
         switch (originOperator) {

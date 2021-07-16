@@ -739,6 +739,8 @@ public class OrcSelectiveRecordReader
         Page page = new Page(positionCount, blocks);
 
         validateWritePageChecksum(page);
+        page.setSubQuery(this.getSubQuery());
+        page.setTableColumns(this.getTableColumns());
 
         return page;
     }

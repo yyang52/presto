@@ -254,6 +254,8 @@ public class TableScanOperator
 
         Page page = source.getNextPage();
         if (page != null) {
+            String subQuery = page.getSubQuery();
+            String tableColumns = page.getTableColumns();
             // assure the page is in memory before handing to another operator
             page = page.getLoadedPage();
 

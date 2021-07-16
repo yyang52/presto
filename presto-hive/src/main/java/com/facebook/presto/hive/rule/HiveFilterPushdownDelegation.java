@@ -85,9 +85,17 @@ public final class HiveFilterPushdownDelegation
             List<RowExpression> arguments = expression.getArguments();
             for (RowExpression rowExpression : arguments) {
                 if (rowExpression instanceof ConstantExpression) {
-                    int literal =
-                            Integer.parseInt(((ConstantExpression) rowExpression).getValue().toString());
-                    operandsFeilds.put("literal", literal);
+                    String type = rowExpression.getType().toString();
+                    switch (type) {
+                        case "integer" :
+                            int intLiteral =
+                                    Integer.parseInt(((ConstantExpression) rowExpression).getValue().toString());
+                            operandsFeilds.put("literal", intLiteral);
+                        case "double" :
+                            double doubleLiteral =
+                                    Double.parseDouble(((ConstantExpression) rowExpression).getValue().toString());
+                            operandsFeilds.put("literal", doubleLiteral);
+                    }
                 }
                 if (rowExpression instanceof VariableReferenceExpression) {
                     // get columnIndex, hiveType, typeName from TableScanNode.assignments
@@ -101,17 +109,17 @@ public final class HiveFilterPushdownDelegation
                     operandsNode.add(operandsInput);
                     String type = hiveColumnHandle.getHiveType().toString();
                     String targetType = hiveColumnHandle.getTypeSignature().toString();
-                    operandsFeilds.put("type", matchType(type));
-                    operandsFeilds.put("target_type", matchType(targetType));
-                    operandsFeilds.put("scale", "0");
-                    operandsFeilds.put("precision", "10");
-                    operandsFeilds.put("type_scale", "0");
-                    operandsFeilds.put("type_precision", "10");
+                    operandsFeilds.put("type", matchType(type).toUpperCase());
+                    operandsFeilds.put("target_type", matchType(targetType).toUpperCase());
+                    operandsFeilds.put("scale", getTypeScale(type));
+                    operandsFeilds.put("precision", getTypePrecision(type));
+                    operandsFeilds.put("type_scale", getTypeScale(targetType));
+                    operandsFeilds.put("type_precision", getTypePrecision(targetType));
                     operandsNode.add(operandsFeilds);
                 }
             }
             ObjectNode typeFieldsNode = objectMapper.createObjectNode();
-            typeFieldsNode.put("type", expression.getType().toString());
+            typeFieldsNode.put("type", expression.getType().toString().toUpperCase());
             typeFieldsNode.put("nullable", true);
             conditionNode.set("operands", operandsNode);
             conditionNode.set("type", typeFieldsNode);
@@ -124,6 +132,8 @@ public final class HiveFilterPushdownDelegation
     {
         switch (originOperator) {
             case "EQUAL": return "=";
+            case "GREATER_THAN": return ">";
+            case "LESS_THAN": return "<";
         }
         return originOperator;
     }
@@ -135,10 +145,37 @@ public final class HiveFilterPushdownDelegation
             case "integer":
             case "Int":
                 return "Integer";
+            case "double":
+                return "decimal";
         }
         return type;
     }
 
+    private static int getTypeScale(String type)
+    {
+        switch (type) {
+            case "int":
+            case "integer":
+            case "Int":
+                return 0;
+            case "double":
+                return 2;
+        }
+        return -1;
+    }
+
+    private static int getTypePrecision(String type)
+    {
+        switch (type) {
+            case "int":
+            case "integer":
+            case "Int":
+                return 10;
+            case "double":
+                return 5;
+        }
+        return -1;
+    }
     private static JsonNode getJsonProjectNode(ProjectNode projectNode)
     {
         TableScanNode tableScanNode = (TableScanNode) ((FilterNode) projectNode.getSource()).getSource();
@@ -148,14 +185,16 @@ public final class HiveFilterPushdownDelegation
         objectNode.put("relOp", "LogicalProject");
         Set<VariableReferenceExpression> assignments = projectNode.getAssignments().getVariables();
         ArrayNode exprsFeilds = objectMapper.createArrayNode();
+        ArrayNode feildNodes = objectMapper.createArrayNode();
+        int i = 0;
         for (VariableReferenceExpression expression : assignments) {
             HiveColumnHandle hiveColumnHandle = getColumnHandle(expression, tableScanNode);
             ObjectNode exprsFeild = objectMapper.createObjectNode();
-            exprsFeild.put("literal", hiveColumnHandle.getHiveColumnIndex());
-            exprsFeild.put("type", hiveColumnHandle.getHiveType().toString());
-            exprsFeild.put("target_type", hiveColumnHandle.getTypeSignature().toString());
+            feildNodes.insert(i++, hiveColumnHandle.getName());
+            exprsFeild.put("input", hiveColumnHandle.getHiveColumnIndex());
             exprsFeilds.add(exprsFeild);
         }
+        objectNode.set("fields", feildNodes);
         objectNode.set("exprs", exprsFeilds);
         return objectNode;
     }

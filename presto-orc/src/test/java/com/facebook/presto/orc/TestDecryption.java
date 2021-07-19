@@ -761,6 +761,8 @@ public class TestDecryption
                 false,
                 new TestingHiveOrcAggregatedMemoryContext(),
                 Optional.empty(),
-                MAX_BATCH_SIZE);
+                MAX_BATCH_SIZE,
+                "",
+                "");
     }
 }

@@ -206,7 +206,9 @@ public class TestOrcRecordReaderDwrfStripeCaching
                 false,
                 new TestingHiveOrcAggregatedMemoryContext(),
                 Optional.empty(),
-                MAX_BATCH_SIZE);
+                MAX_BATCH_SIZE,
+                "",
+                "");
         Page page;
         int cnt = 0;
         while ((page = recordReader.getNextPage()) != null) {

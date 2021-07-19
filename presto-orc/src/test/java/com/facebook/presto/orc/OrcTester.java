@@ -1696,7 +1696,9 @@ public class OrcTester
                 LEGACY_MAP_SUBSCRIPT,
                 systemMemoryUsage,
                 Optional.empty(),
-                initialBatchSize);
+                initialBatchSize,
+                "",
+                "");
     }
 
     private static void writeValue(Type type, BlockBuilder blockBuilder, Object value)

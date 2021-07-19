@@ -30,7 +30,7 @@ import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
-public final class Page
+public class Page
 {
     public static final int INSTANCE_SIZE = ClassLayout.parseClass(Page.class).instanceSize();
     private static final Block[] EMPTY_BLOCKS = new Block[0];
@@ -49,6 +49,8 @@ public final class Page
     private volatile long sizeInBytes = -1;
     private volatile long retainedSizeInBytes = -1;
     private volatile long logicalSizeInBytes = -1;
+    private String subQuery;
+    private String tableColumns;
 
     public Page(Block... blocks)
     {
@@ -70,6 +72,26 @@ public final class Page
         requireNonNull(blocks, "blocks is null");
         this.positionCount = positionCount;
         this.blocks = blocksCopyRequired ? blocks.clone() : blocks;
+    }
+
+    public String getSubQuery()
+    {
+        return subQuery;
+    }
+
+    public String getTableColumns()
+    {
+        return tableColumns;
+    }
+
+    public void setSubQuery(String subQuery)
+    {
+        this.subQuery = subQuery;
+    }
+
+    public void setTableColumns(String tableColumns)
+    {
+        this.tableColumns = tableColumns;
     }
 
     public int getChannelCount()

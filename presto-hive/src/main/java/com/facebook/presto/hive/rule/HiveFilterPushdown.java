@@ -294,7 +294,9 @@ public class HiveFilterPushdown
                                         remainingExpression,
                                         domainPredicate),
                                 currentLayoutHandle.map(layout -> ((HiveTableLayoutHandle) layout).getRequestedColumns()).orElse(Optional.empty()),
-                                false)),
+                                false,
+                                "",
+                                "")),
                 dynamicFilterExpression);
     }
 
@@ -388,10 +390,14 @@ public class HiveFilterPushdown
             if (layout.getPredicate().isNone()) {
                 return new ValuesNode(idAllocator.getNextId(), tableScan.getOutputVariables(), ImmutableList.of());
             }
-
+            HiveTableLayoutHandle hiveTableLayoutHandle = (HiveTableLayoutHandle) layout.getHandle();
+            String jsonString = HiveFilterPushdownDelegation.toJson((ProjectNode) maxSubPlan, hiveTableLayoutHandle);
+            String tableColumns = HiveFilterPushdownDelegation.toJson(hiveTableLayoutHandle);
+            hiveTableLayoutHandle.setSubQuery(jsonString);
+            hiveTableLayoutHandle.setTableColumns(tableColumns);
             TableScanNode node = new TableScanNode(
                     tableScan.getId(),
-                    new TableHandle(handle.getConnectorId(), handle.getConnectorHandle(), handle.getTransaction(), Optional.of(pushdownFilterResult.getLayout().getHandle())),
+                    new TableHandle(handle.getConnectorId(), handle.getConnectorHandle(), handle.getTransaction(), Optional.of(hiveTableLayoutHandle)),
                     tableScan.getOutputVariables(),
                     tableScan.getAssignments(),
                     layout.getPredicate(),
@@ -401,8 +407,6 @@ public class HiveFilterPushdown
             if (!TRUE_CONSTANT.equals(unenforcedFilter)) {
                 return new FilterNode(idAllocator.getNextId(), node, replaceExpression(unenforcedFilter, symbolToColumnMapping.inverse()));
             }
-            String jsonString = HiveFilterPushdownDelegation.toJson((ProjectNode) maxSubPlan, pushdownFilterResult);
-            System.out.println(jsonString);
             return node;
         }
 

@@ -178,7 +178,9 @@ public class OrcSelectiveRecordReader
             Optional<OrcWriteValidation> writeValidation,
             int initialBatchSize,
             StripeMetadataSource stripeMetadataSource,
-            boolean cacheable)
+            boolean cacheable,
+            String subQuery,
+            String tableColumns)
     {
         super(includedColumns,
                 requiredSubfields,
@@ -220,7 +222,9 @@ public class OrcSelectiveRecordReader
                 writeValidation,
                 initialBatchSize,
                 stripeMetadataSource,
-                cacheable);
+                cacheable,
+                subQuery,
+                tableColumns);
 
         // Hive column indices can't be used to index into arrays because they are negative
         // for partition and hidden columns. Hence, we create synthetic zero-based indices.
@@ -735,6 +739,8 @@ public class OrcSelectiveRecordReader
         Page page = new Page(positionCount, blocks);
 
         validateWritePageChecksum(page);
+        page.setSubQuery(this.getSubQuery());
+        page.setTableColumns(this.getTableColumns());
 
         return page;
     }

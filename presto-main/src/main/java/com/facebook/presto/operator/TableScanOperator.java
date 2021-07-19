@@ -29,7 +29,6 @@ import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-import com.mapd.CiderJNI;
 import sun.misc.Unsafe;
 
 import java.io.Closeable;
@@ -255,6 +254,8 @@ public class TableScanOperator
 
         Page page = source.getNextPage();
         if (page != null) {
+            String subQuery = page.getSubQuery();
+            String tableColumns = page.getTableColumns();
             // assure the page is in memory before handing to another operator
             page = page.getLoadedPage();
 
@@ -291,7 +292,7 @@ public class TableScanOperator
                         resultNulls[i] = nullPtr;
                     }
                 }
-
+                /*
                 CiderJNI.processBlocks(
                         "select a from test where b > 12;",
                         "schema",
@@ -300,6 +301,7 @@ public class TableScanOperator
                         resultBuffers,
                         resultNulls,
                         positionCount);
+                 */
             }
             catch (NoSuchFieldException e) {
                 e.printStackTrace();

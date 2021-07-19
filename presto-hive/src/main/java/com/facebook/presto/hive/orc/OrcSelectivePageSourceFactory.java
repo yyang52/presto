@@ -31,6 +31,7 @@ import com.facebook.presto.hive.HiveColumnHandle;
 import com.facebook.presto.hive.HiveFileContext;
 import com.facebook.presto.hive.HiveOrcAggregatedMemoryContext;
 import com.facebook.presto.hive.HiveSelectivePageSourceFactory;
+import com.facebook.presto.hive.HiveTableLayoutHandle;
 import com.facebook.presto.hive.HiveType;
 import com.facebook.presto.hive.SubfieldExtractor;
 import com.facebook.presto.hive.metastore.Storage;
@@ -205,7 +206,8 @@ public class OrcSelectivePageSourceFactory
             RowExpression remainingPredicate,
             DateTimeZone hiveStorageTimeZone,
             HiveFileContext hiveFileContext,
-            Optional<EncryptionInformation> encryptionInformation)
+            Optional<EncryptionInformation> encryptionInformation,
+            HiveTableLayoutHandle layout)
     {
         if (!OrcSerde.class.getName().equals(storage.getStorageFormat().getSerDe())) {
             return Optional.empty();
@@ -245,7 +247,8 @@ public class OrcSelectivePageSourceFactory
                 hiveFileContext,
                 tupleDomainFilterCache,
                 encryptionInformation,
-                NO_ENCRYPTION));
+                NO_ENCRYPTION,
+                layout));
     }
 
     public static ConnectorPageSource createOrcPageSource(
@@ -277,10 +280,10 @@ public class OrcSelectivePageSourceFactory
             HiveFileContext hiveFileContext,
             TupleDomainFilterCache tupleDomainFilterCache,
             Optional<EncryptionInformation> encryptionInformation,
-            DwrfEncryptionProvider dwrfEncryptionProvider)
+            DwrfEncryptionProvider dwrfEncryptionProvider,
+            HiveTableLayoutHandle layout)
     {
         checkArgument(domainCompactionThreshold >= 1, "domainCompactionThreshold must be at least 1");
-
         DataSize maxMergeDistance = getOrcMaxMergeDistance(session);
         DataSize maxBufferSize = getOrcMaxBufferSize(session);
         DataSize streamBufferSize = getOrcStreamBufferSize(session);
@@ -395,7 +398,9 @@ public class OrcSelectivePageSourceFactory
                     session.getSqlFunctionProperties().isLegacyMapSubscript(),
                     systemMemoryUsage,
                     Optional.empty(),
-                    INITIAL_BATCH_SIZE);
+                    INITIAL_BATCH_SIZE,
+                    layout.getSubQuery(),
+                    layout.getTableColumns());
 
             return new OrcSelectivePageSource(
                     recordReader,

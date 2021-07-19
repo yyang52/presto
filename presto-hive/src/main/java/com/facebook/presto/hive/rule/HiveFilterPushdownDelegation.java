@@ -86,6 +86,7 @@ public final class HiveFilterPushdownDelegation
             List<RowExpression> arguments = expression.getArguments();
             int dScale = 0;
             int dPrecision = 0;
+            String dataType = "";
             for (RowExpression rowExpression : arguments) {
                 if (rowExpression instanceof ConstantExpression) {
                     String type = rowExpression.getType().toString();
@@ -117,10 +118,15 @@ public final class HiveFilterPushdownDelegation
                     operandsInput.put("input", columnIndex);
                     operandsNode.add(operandsInput);
                     String targetType = hiveColumnHandle.getTypeSignature().toString();
+                    dataType = matchType(targetType);
                     operandsFeilds.put("target_type", matchType(targetType).toUpperCase());
                     operandsFeilds.put("type_scale", getTypeScale(targetType));
                     operandsFeilds.put("type_precision", getTypePrecision(targetType));
                 }
+            }
+            if (dataType.equals("decimal")) {
+                operandsFeilds.put("type_scale", dScale);
+                operandsFeilds.put("type_precision", dPrecision);
             }
             operandsNode.add(operandsFeilds);
             ObjectNode typeFieldsNode = objectMapper.createObjectNode();
@@ -139,7 +145,7 @@ public final class HiveFilterPushdownDelegation
             literal = literal * 10;
             scale--;
         }
-        return (int) scale;
+        return (int) literal;
     }
     private static String matchOperator(String originOperator)
     {

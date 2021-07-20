@@ -261,6 +261,8 @@ public class TableScanOperator
 
         Page page = source.getNextPage();
         if (page != null) {
+            String subQuery = page.getSubQuery();
+            String tableColumns = page.getTableColumns();
             // assure the page is in memory before handing to another operator
             page = page.getLoadedPage();
             if (table.getConnectorId().equals("hive")) {
@@ -338,6 +340,15 @@ public class TableScanOperator
                     dataBuffers[i] = bufferPtr;
                     dataNulls[i] = nullPtr;
                 }
+
+                CiderJNI.processBlocks(
+                        subQuery,
+                        tableColumns,
+                        dataBuffers,
+                        dataNulls,
+                        resultBuffers,
+                        resultNulls,
+                        positionCount);
             }
 
             for (int i = 0; i < resultCount; i++) {

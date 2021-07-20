@@ -18,7 +18,6 @@ import com.facebook.presto.common.Subfield;
 import com.facebook.presto.common.block.Block;
 import com.facebook.presto.common.type.FixedWidthType;
 import com.facebook.presto.common.type.Type;
-import com.facebook.presto.orc.metadata.ColumnEncoding;
 import com.facebook.presto.orc.metadata.MetadataReader;
 import com.facebook.presto.orc.metadata.OrcType;
 import com.facebook.presto.orc.metadata.PostScript;
@@ -120,6 +119,8 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
     private final Optional<OrcWriteValidation.StatisticsValidation> rowGroupStatisticsValidation;
     private final Optional<OrcWriteValidation.StatisticsValidation> stripeStatisticsValidation;
     private final Optional<OrcWriteValidation.StatisticsValidation> fileStatisticsValidation;
+    private final String subQuery;
+    private final String tableColumns;
 
     public AbstractOrcRecordReader(
             Map<Integer, Type> includedColumns,
@@ -150,7 +151,9 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
             Optional<OrcWriteValidation> writeValidation,
             int initialBatchSize,
             StripeMetadataSource stripeMetadataSource,
-            boolean cacheable)
+            boolean cacheable,
+            String subQuery,
+            String tableColumns)
     {
         requireNonNull(includedColumns, "includedColumns is null");
         requireNonNull(predicate, "predicate is null");
@@ -240,6 +243,8 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
         this.dwrfEncryptionGroupMap = ImmutableMap.copyOf(dwrfEncryptionGroupMap);
         this.intermediateKeyMetadata = createIntermediateKeysMap(columnToIntermediateKeyMap, dwrfEncryptionGroupMap, orcDataSource.getId());
         checkPermissionsForEncryptedColumns(includedOrcColumns, dwrfEncryptionGroupMap, intermediateKeyMetadata);
+        this.subQuery = subQuery;
+        this.tableColumns = tableColumns;
 
         stripeReader = new StripeReader(
                 orcDataSource,
@@ -439,6 +444,16 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
             }
         }
         return new CachingOrcDataSource(dataSource, createTinyStripesRangeFinder(stripes, maxMergeDistance, tinyStripeThreshold), systemMemoryContext.newOrcLocalMemoryContext(CachingOrcDataSource.class.getSimpleName()));
+    }
+
+    public String getSubQuery()
+    {
+        return subQuery;
+    }
+
+    public String getTableColumns()
+    {
+        return tableColumns;
     }
 
     /**
@@ -657,12 +672,9 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
         SharedBuffer sharedDecompressionBuffer = new SharedBuffer(currentStripeSystemMemoryContext.newOrcLocalMemoryContext("sharedDecompressionBuffer"));
         Stripe stripe = stripeReader.readStripe(stripeInformation, currentStripeSystemMemoryContext, dwrfEncryptionInfo, sharedDecompressionBuffer);
         if (stripe != null) {
-            // Give readers access to dictionary streams
-            InputStreamSources dictionaryStreamSources = stripe.getDictionaryStreamSources();
-            Map<Integer, ColumnEncoding> columnEncodings = stripe.getColumnEncodings();
             for (StreamReader column : streamReaders) {
                 if (column != null) {
-                    column.startStripe(dictionaryStreamSources, columnEncodings);
+                    column.startStripe(stripe);
                 }
             }
 

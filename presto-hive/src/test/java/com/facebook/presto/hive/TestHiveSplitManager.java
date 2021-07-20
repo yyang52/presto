@@ -568,7 +568,9 @@ public class TestHiveSplitManager
                         false,
                         "layout",
                         Optional.empty(),
-                        false),
+                        false,
+                        "",
+                        ""),
                 SPLIT_SCHEDULING_CONTEXT);
         List<Set<ColumnHandle>> actualRedundantColumnDomains = splitSource.getNextBatch(NOT_PARTITIONED, 100).get().getSplits().stream()
                 .map(HiveSplit.class::cast)

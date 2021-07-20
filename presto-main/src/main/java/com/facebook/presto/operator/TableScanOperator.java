@@ -383,7 +383,7 @@ public class TableScanOperator
                 long resultPtr = resultBuffers[i];
                 int index = 0;
                 if (type.equals("INT")) {
-                    int[] outputBuffer = new int[resultSize]
+                    int[] outputBuffer = new int[resultSize];
                     for (int idx = 0; idx < positionCount; idx++) {
                         // FIXME: need to confirm how nullPtr is represented
                         if (unsafe.getByte(nullPtr + idx) == 0x01) {
@@ -396,7 +396,7 @@ public class TableScanOperator
                     long[] outputBuffer = new long[resultSize];
                     for (int idx = 0; idx < positionCount; idx++) {
                         if (unsafe.getByte(nullPtr + idx) == 0x01) {
-                            outputBuffer[index++] = unsafe.getInt(resultPtr + idx * step);
+                            outputBuffer[index++] = unsafe.getLong(resultPtr + idx * step);
                         }
                     }
                     outputBlocks[i] = new LongArrayBlock(resultSize, Optional.empty(), outputBuffer);

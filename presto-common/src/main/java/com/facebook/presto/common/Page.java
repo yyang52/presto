@@ -49,8 +49,6 @@ public class Page
     private volatile long sizeInBytes = -1;
     private volatile long retainedSizeInBytes = -1;
     private volatile long logicalSizeInBytes = -1;
-    private String subQuery;
-    private String tableColumns;
 
     public Page(Block... blocks)
     {
@@ -72,26 +70,6 @@ public class Page
         requireNonNull(blocks, "blocks is null");
         this.positionCount = positionCount;
         this.blocks = blocksCopyRequired ? blocks.clone() : blocks;
-    }
-
-    public String getSubQuery()
-    {
-        return subQuery;
-    }
-
-    public String getTableColumns()
-    {
-        return tableColumns;
-    }
-
-    public void setSubQuery(String subQuery)
-    {
-        this.subQuery = subQuery;
-    }
-
-    public void setTableColumns(String tableColumns)
-    {
-        this.tableColumns = tableColumns;
     }
 
     public int getChannelCount()

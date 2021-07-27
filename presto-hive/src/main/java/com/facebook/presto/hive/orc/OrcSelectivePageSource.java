@@ -154,7 +154,7 @@ public class OrcSelectivePageSource
         }
 
         Page output = null;
-        long ptr = CiderJNI.init();
+        long ptr = CiderJNI.getPtr();
         try {
             Unsafe unsafe = getUnsafe();
             for (int i = 0; i < count; i++) {
@@ -253,7 +253,6 @@ public class OrcSelectivePageSource
             e.printStackTrace();
         }
 
-        CiderJNI.close(ptr);
         return output;
     }
 

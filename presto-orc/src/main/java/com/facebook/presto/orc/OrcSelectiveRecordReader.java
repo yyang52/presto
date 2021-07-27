@@ -145,8 +145,6 @@ public class OrcSelectiveRecordReader
 
     private int readPositions;
 
-    private final long jniPtr = 0;
-
     public OrcSelectiveRecordReader(
             Map<Integer, Type> includedColumns,                 // key: hiveColumnIndex
             List<Integer> outputColumns,                        // elements are hive column indices

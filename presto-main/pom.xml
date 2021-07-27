@@ -451,11 +451,6 @@
             <artifactId>presto-testng-services</artifactId>
             <scope>test</scope>
         </dependency>
-
-        <dependency>
-            <groupId>com.mapd</groupId>
-            <artifactId>ciderJNI</artifactId>
-        </dependency>
     </dependencies>
 
     <build>

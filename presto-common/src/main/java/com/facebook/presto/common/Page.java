@@ -51,7 +51,6 @@ public class Page
     private volatile long logicalSizeInBytes = -1;
     private String subQuery;
     private String tableColumns;
-    private long jniPtr;
 
     public Page(Block... blocks)
     {
@@ -85,9 +84,6 @@ public class Page
         return tableColumns;
     }
 
-    public long getJniPtr()
-    { return jniPtr; }
-
     public void setSubQuery(String subQuery)
     {
         this.subQuery = subQuery;
@@ -97,9 +93,6 @@ public class Page
     {
         this.tableColumns = tableColumns;
     }
-
-    public void setJniPtr(long jniPtr)
-    { this.jniPtr = jniPtr; }
 
     public int getChannelCount()
     {

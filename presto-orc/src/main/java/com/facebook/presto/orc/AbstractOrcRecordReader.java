@@ -122,6 +122,9 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
     private final String subQuery;
     private final String tableColumns;
 
+    //FIXME column size
+    private int columnNum;
+
     public AbstractOrcRecordReader(
             Map<Integer, Type> includedColumns,
             Map<Integer, List<Subfield>> requiredSubfields,
@@ -169,6 +172,7 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
         requireNonNull(userMetadata, "userMetadata is null");
         requireNonNull(systemMemoryUsage, "systemMemoryUsage is null");
 
+        this.columnNum = includedColumns.keySet().size();
         this.writeValidation = requireNonNull(writeValidation, "writeValidation is null");
         this.writeChecksumBuilder = writeValidation.map(validation -> createWriteChecksumBuilder(includedColumns));
         this.rowGroupStatisticsValidation = writeValidation.map(validation -> validation.createWriteStatisticsBuilder(includedColumns));
@@ -454,6 +458,11 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
     public String getTableColumns()
     {
         return tableColumns;
+    }
+
+    public int getColumnNum()
+    {
+        return columnNum;
     }
 
     /**

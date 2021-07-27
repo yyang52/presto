@@ -21,11 +21,6 @@
             <artifactId>fastutil</artifactId>
         </dependency>
 
-<!--        <dependency>-->
-<!--            <groupId>com.mapd</groupId>-->
-<!--            <artifactId>ciderJNI</artifactId>-->
-<!--        </dependency>-->
-
         <dependency>
             <groupId>com.facebook.presto.orc</groupId>
             <artifactId>orc-protobuf</artifactId>

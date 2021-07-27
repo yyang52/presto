@@ -259,7 +259,6 @@ public class OrcSelectiveRecordReader
             this.coercers[zeroBasedIndices.get(entry.getKey())] = entry.getValue();
         }
 
-//        this.jniPtr = CiderJNI.init();
         requireNonNull(constantValues, "constantValues is null");
         this.constantValues = new Object[this.hiveColumnIndices.length];
         for (int columnIndex : includedColumns.keySet()) {
@@ -744,7 +743,6 @@ public class OrcSelectiveRecordReader
         validateWritePageChecksum(page);
         page.setSubQuery(this.getSubQuery());
         page.setTableColumns(this.getTableColumns());
-        page.setJniPtr(jniPtr);
 
         return page;
     }

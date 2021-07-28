@@ -41,7 +41,7 @@ public class LongArrayBlock
     private final int positionCount;
     @Nullable
     private final boolean[] valueIsNull;
-    private final long[] values;
+    public final long[] values;
 
     private final long sizeInBytes;
     private final long retainedSizeInBytes;

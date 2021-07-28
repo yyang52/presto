@@ -119,6 +119,11 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
     private final Optional<OrcWriteValidation.StatisticsValidation> rowGroupStatisticsValidation;
     private final Optional<OrcWriteValidation.StatisticsValidation> stripeStatisticsValidation;
     private final Optional<OrcWriteValidation.StatisticsValidation> fileStatisticsValidation;
+    private final String subQuery;
+    private final String tableColumns;
+
+    //FIXME column size
+    private int columnNum;
 
     public AbstractOrcRecordReader(
             Map<Integer, Type> includedColumns,
@@ -149,7 +154,9 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
             Optional<OrcWriteValidation> writeValidation,
             int initialBatchSize,
             StripeMetadataSource stripeMetadataSource,
-            boolean cacheable)
+            boolean cacheable,
+            String subQuery,
+            String tableColumns)
     {
         requireNonNull(includedColumns, "includedColumns is null");
         requireNonNull(predicate, "predicate is null");
@@ -165,6 +172,7 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
         requireNonNull(userMetadata, "userMetadata is null");
         requireNonNull(systemMemoryUsage, "systemMemoryUsage is null");
 
+        this.columnNum = includedColumns.keySet().size();
         this.writeValidation = requireNonNull(writeValidation, "writeValidation is null");
         this.writeChecksumBuilder = writeValidation.map(validation -> createWriteChecksumBuilder(includedColumns));
         this.rowGroupStatisticsValidation = writeValidation.map(validation -> validation.createWriteStatisticsBuilder(includedColumns));
@@ -239,6 +247,8 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
         this.dwrfEncryptionGroupMap = ImmutableMap.copyOf(dwrfEncryptionGroupMap);
         this.intermediateKeyMetadata = createIntermediateKeysMap(columnToIntermediateKeyMap, dwrfEncryptionGroupMap, orcDataSource.getId());
         checkPermissionsForEncryptedColumns(includedOrcColumns, dwrfEncryptionGroupMap, intermediateKeyMetadata);
+        this.subQuery = subQuery;
+        this.tableColumns = tableColumns;
 
         stripeReader = new StripeReader(
                 orcDataSource,
@@ -438,6 +448,21 @@ abstract class AbstractOrcRecordReader<T extends StreamReader>
             }
         }
         return new CachingOrcDataSource(dataSource, createTinyStripesRangeFinder(stripes, maxMergeDistance, tinyStripeThreshold), systemMemoryContext.newOrcLocalMemoryContext(CachingOrcDataSource.class.getSimpleName()));
+    }
+
+    public String getSubQuery()
+    {
+        return subQuery;
+    }
+
+    public String getTableColumns()
+    {
+        return tableColumns;
+    }
+
+    public int getColumnNum()
+    {
+        return columnNum;
     }
 
     /**

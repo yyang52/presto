@@ -21,7 +21,6 @@ import com.facebook.presto.common.relation.Predicate;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
 import com.facebook.presto.expressions.DefaultRowExpressionTraversalVisitor;
-import com.facebook.presto.expressions.DynamicFilters.DynamicFilterExtractResult;
 import com.facebook.presto.hive.BucketAdaptation;
 import com.facebook.presto.hive.EncryptionInformation;
 import com.facebook.presto.hive.FileFormatDataSourceStats;
@@ -32,6 +31,7 @@ import com.facebook.presto.hive.HiveColumnHandle;
 import com.facebook.presto.hive.HiveFileContext;
 import com.facebook.presto.hive.HiveOrcAggregatedMemoryContext;
 import com.facebook.presto.hive.HiveSelectivePageSourceFactory;
+import com.facebook.presto.hive.HiveTableLayoutHandle;
 import com.facebook.presto.hive.HiveType;
 import com.facebook.presto.hive.SubfieldExtractor;
 import com.facebook.presto.hive.metastore.Storage;
@@ -87,7 +87,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -96,11 +95,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
-import static com.facebook.presto.expressions.DynamicFilters.extractDynamicFilters;
-import static com.facebook.presto.expressions.LogicalRowExpressions.TRUE_CONSTANT;
-import static com.facebook.presto.expressions.LogicalRowExpressions.and;
-import static com.facebook.presto.expressions.LogicalRowExpressions.binaryExpression;
-import static com.facebook.presto.expressions.LogicalRowExpressions.extractConjuncts;
 import static com.facebook.presto.expressions.RowExpressionNodeInliner.replaceExpression;
 import static com.facebook.presto.hive.HiveBucketing.getHiveBucket;
 import static com.facebook.presto.hive.HiveColumnHandle.ColumnType.AGGREGATED;
@@ -114,7 +108,6 @@ import static com.facebook.presto.hive.HiveSessionProperties.getOrcMaxMergeDista
 import static com.facebook.presto.hive.HiveSessionProperties.getOrcMaxReadBlockSize;
 import static com.facebook.presto.hive.HiveSessionProperties.getOrcStreamBufferSize;
 import static com.facebook.presto.hive.HiveSessionProperties.getOrcTinyStripeThreshold;
-import static com.facebook.presto.hive.HiveSessionProperties.isAdaptiveFilterReorderingEnabled;
 import static com.facebook.presto.hive.HiveSessionProperties.isOrcBloomFiltersEnabled;
 import static com.facebook.presto.hive.HiveSessionProperties.isOrcZstdJniDecompressionEnabled;
 import static com.facebook.presto.hive.HiveUtil.getPhysicalHiveColumnHandles;
@@ -122,7 +115,6 @@ import static com.facebook.presto.hive.HiveUtil.typedPartitionKey;
 import static com.facebook.presto.orc.DwrfEncryptionProvider.NO_ENCRYPTION;
 import static com.facebook.presto.orc.OrcEncoding.ORC;
 import static com.facebook.presto.orc.OrcReader.INITIAL_BATCH_SIZE;
-import static com.facebook.presto.spi.relation.SpecialFormExpression.Form.AND;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.common.base.Verify.verify;
@@ -214,7 +206,8 @@ public class OrcSelectivePageSourceFactory
             RowExpression remainingPredicate,
             DateTimeZone hiveStorageTimeZone,
             HiveFileContext hiveFileContext,
-            Optional<EncryptionInformation> encryptionInformation)
+            Optional<EncryptionInformation> encryptionInformation,
+            HiveTableLayoutHandle layout)
     {
         if (!OrcSerde.class.getName().equals(storage.getStorageFormat().getSerDe())) {
             return Optional.empty();
@@ -254,7 +247,8 @@ public class OrcSelectivePageSourceFactory
                 hiveFileContext,
                 tupleDomainFilterCache,
                 encryptionInformation,
-                NO_ENCRYPTION));
+                NO_ENCRYPTION,
+                layout));
     }
 
     public static ConnectorPageSource createOrcPageSource(
@@ -286,10 +280,10 @@ public class OrcSelectivePageSourceFactory
             HiveFileContext hiveFileContext,
             TupleDomainFilterCache tupleDomainFilterCache,
             Optional<EncryptionInformation> encryptionInformation,
-            DwrfEncryptionProvider dwrfEncryptionProvider)
+            DwrfEncryptionProvider dwrfEncryptionProvider,
+            HiveTableLayoutHandle layout)
     {
         checkArgument(domainCompactionThreshold >= 1, "domainCompactionThreshold must be at least 1");
-
         DataSize maxMergeDistance = getOrcMaxMergeDistance(session);
         DataSize maxBufferSize = getOrcMaxBufferSize(session);
         DataSize streamBufferSize = getOrcStreamBufferSize(session);
@@ -390,7 +384,7 @@ public class OrcSelectivePageSourceFactory
 
             OrcSelectiveRecordReader recordReader = reader.createSelectiveRecordReader(
                     columnTypes,
-                    outputIndices,
+                    new ArrayList<>(columnTypes.keySet()),
                     tupleDomainFilters,
                     filterFunctions,
                     inputs.inverse(),
@@ -404,7 +398,9 @@ public class OrcSelectivePageSourceFactory
                     session.getSqlFunctionProperties().isLegacyMapSubscript(),
                     systemMemoryUsage,
                     Optional.empty(),
-                    INITIAL_BATCH_SIZE);
+                    INITIAL_BATCH_SIZE,
+                    layout.getSubQuery(),
+                    layout.getTableColumns());
 
             return new OrcSelectivePageSource(
                     recordReader,
@@ -576,18 +572,18 @@ public class OrcSelectivePageSourceFactory
 
     private static Map<Integer, Map<Subfield, TupleDomainFilter>> toTupleDomainFilters(TupleDomain<Subfield> domainPredicate, Map<String, Integer> columnIndices, Map<Integer, HiveCoercer> coercers, TupleDomainFilterCache tupleDomainFilterCache)
     {
-        Map<Subfield, TupleDomainFilter> filtersBySubfield = Maps.transformValues(domainPredicate.getDomains().get(), tupleDomainFilterCache::getFilter);
+//        Map<Subfield, TupleDomainFilter> filtersBySubfield = Maps.transformValues(domainPredicate.getDomains().get(), tupleDomainFilterCache::getFilter);
 
         Map<Integer, Map<Subfield, TupleDomainFilter>> filtersByColumn = new HashMap<>();
-        for (Map.Entry<Subfield, TupleDomainFilter> entry : filtersBySubfield.entrySet()) {
-            Subfield subfield = entry.getKey();
-            int columnIndex = columnIndices.get(subfield.getRootName());
-            TupleDomainFilter filter = entry.getValue();
-            if (coercers.containsKey(columnIndex)) {
-                filter = coercers.get(columnIndex).toCoercingFilter(filter, subfield);
-            }
-            filtersByColumn.computeIfAbsent(columnIndex, k -> new HashMap<>()).put(subfield, filter);
-        }
+//        for (Map.Entry<Subfield, TupleDomainFilter> entry : filtersBySubfield.entrySet()) {
+//            Subfield subfield = entry.getKey();
+//            int columnIndex = columnIndices.get(subfield.getRootName());
+//            TupleDomainFilter filter = entry.getValue();
+//            if (coercers.containsKey(columnIndex)) {
+//                filter = coercers.get(columnIndex).toCoercingFilter(filter, subfield);
+//            }
+//            filtersByColumn.computeIfAbsent(columnIndex, k -> new HashMap<>()).put(subfield, filter);
+//        }
 
         return ImmutableMap.copyOf(filtersByColumn);
     }
@@ -626,36 +622,36 @@ public class OrcSelectivePageSourceFactory
         bucketAdapter.map(predicate -> new FilterFunction(session.getSqlFunctionProperties(), true, predicate))
                 .ifPresent(filterFunctions::add);
 
-        if (TRUE_CONSTANT.equals(filter)) {
-            return filterFunctions.build();
-        }
-
-        DynamicFilterExtractResult extractDynamicFilterResult = extractDynamicFilters(filter);
-
-        // dynamic filter will be added through subfield pushdown
-        filter = and(extractDynamicFilterResult.getStaticConjuncts());
-
-        if (!isAdaptiveFilterReorderingEnabled(session)) {
-            filterFunctions.add(new FilterFunction(session.getSqlFunctionProperties(), determinismEvaluator.isDeterministic(filter), predicateCompiler.compilePredicate(session.getSqlFunctionProperties(), session.getSessionFunctions(), filter).get()));
-            return filterFunctions.build();
-        }
-
-        List<RowExpression> conjuncts = extractConjuncts(filter);
-        if (conjuncts.size() == 1) {
-            filterFunctions.add(new FilterFunction(session.getSqlFunctionProperties(), determinismEvaluator.isDeterministic(filter), predicateCompiler.compilePredicate(session.getSqlFunctionProperties(), session.getSessionFunctions(), filter).get()));
-            return filterFunctions.build();
-        }
-
-        // Use LinkedHashMap to preserve user-specified order of conjuncts. This will be the initial order in which filters are applied.
-        Map<Set<Integer>, List<RowExpression>> inputsToConjuncts = new LinkedHashMap<>();
-        for (RowExpression conjunct : conjuncts) {
-            inputsToConjuncts.computeIfAbsent(extractInputs(conjunct), k -> new ArrayList<>()).add(conjunct);
-        }
-
-        inputsToConjuncts.values().stream()
-                .map(expressions -> binaryExpression(AND, expressions))
-                .map(predicate -> new FilterFunction(session.getSqlFunctionProperties(), determinismEvaluator.isDeterministic(predicate), predicateCompiler.compilePredicate(session.getSqlFunctionProperties(), session.getSessionFunctions(), predicate).get()))
-                .forEach(filterFunctions::add);
+//        if (TRUE_CONSTANT.equals(filter)) {
+//            return filterFunctions.build();
+//        }
+//
+//        DynamicFilterExtractResult extractDynamicFilterResult = extractDynamicFilters(filter);
+//
+//        // dynamic filter will be added through subfield pushdown
+//        filter = and(extractDynamicFilterResult.getStaticConjuncts());
+//
+//        if (!isAdaptiveFilterReorderingEnabled(session)) {
+//            filterFunctions.add(new FilterFunction(session.getSqlFunctionProperties(), determinismEvaluator.isDeterministic(filter), predicateCompiler.compilePredicate(session.getSqlFunctionProperties(), session.getSessionFunctions(), filter).get()));
+//            return filterFunctions.build();
+//        }
+//
+//        List<RowExpression> conjuncts = extractConjuncts(filter);
+//        if (conjuncts.size() == 1) {
+//            filterFunctions.add(new FilterFunction(session.getSqlFunctionProperties(), determinismEvaluator.isDeterministic(filter), predicateCompiler.compilePredicate(session.getSqlFunctionProperties(), session.getSessionFunctions(), filter).get()));
+//            return filterFunctions.build();
+//        }
+//
+//        // Use LinkedHashMap to preserve user-specified order of conjuncts. This will be the initial order in which filters are applied.
+//        Map<Set<Integer>, List<RowExpression>> inputsToConjuncts = new LinkedHashMap<>();
+//        for (RowExpression conjunct : conjuncts) {
+//            inputsToConjuncts.computeIfAbsent(extractInputs(conjunct), k -> new ArrayList<>()).add(conjunct);
+//        }
+//
+//        inputsToConjuncts.values().stream()
+//                .map(expressions -> binaryExpression(AND, expressions))
+//                .map(predicate -> new FilterFunction(session.getSqlFunctionProperties(), determinismEvaluator.isDeterministic(predicate), predicateCompiler.compilePredicate(session.getSqlFunctionProperties(), session.getSessionFunctions(), predicate).get()))
+//                .forEach(filterFunctions::add);
 
         return filterFunctions.build();
     }

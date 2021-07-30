@@ -49,7 +49,7 @@ public abstract class CiderOperatorNode
      */
     protected abstract ObjectNode toJson(ObjectMapper objectMapper, String id);
 
-    // DFS visit, TODO(Cheng) need customized vistor???
+    // Currently DFS visit, TODO(Cheng) need customized vistor???
     public String toRAJson()
     {
         int id = 0;
@@ -59,20 +59,27 @@ public abstract class CiderOperatorNode
         ObjectNode rootNode = objectMapper.createObjectNode();
         ArrayNode relsNode = objectMapper.createArrayNode();
         list.add(this);
+        visited.add(this);
         while (!list.isEmpty()) {
             CiderOperatorNode c = list.peek();
-            if (c.children.isEmpty()) {
-                relsNode.add(c.toJson(objectMapper, String.valueOf(id++)));
-                visited.add(list.pop());
-            }
-            else {
-                for (CiderOperatorNode n : list) {
+
+            if (!c.children.isEmpty()) {
+                boolean isAllVisited = true;
+                for (CiderOperatorNode n : c.children) {
                     if (!visited.contains(n)) {
                         list.push(n);
+                        visited.add(n);
+                        isAllVisited = false;
+                        c = n;
                         break;
                     }
                 }
+                if (!isAllVisited) {
+                    continue;
+                }
             }
+            relsNode.add(c.toJson(objectMapper, String.valueOf(id++)));
+            list.pop();
         }
         rootNode.set("rels", relsNode);
         return rootNode.toString();

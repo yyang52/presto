@@ -47,6 +47,8 @@ import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.TableHandle;
 import com.facebook.presto.spi.TableNotFoundException;
 import com.facebook.presto.spi.VariableAllocator;
+import com.facebook.presto.spi.cider.ColumnAndTableResolver;
+import com.facebook.presto.spi.cider.PrestodbPlanBuilder;
 import com.facebook.presto.spi.connector.ConnectorMetadata;
 import com.facebook.presto.spi.function.FunctionMetadataManager;
 import com.facebook.presto.spi.function.StandardFunctionResolution;
@@ -390,8 +392,10 @@ public class HiveFilterPushdown
                 return new ValuesNode(idAllocator.getNextId(), tableScan.getOutputVariables(), ImmutableList.of());
             }
             HiveTableLayoutHandle hiveTableLayoutHandle = (HiveTableLayoutHandle) layout.getHandle();
-            String jsonString = PrestodbPlanBuilder.toRAJsonStr(maxSubPlan);
-            String tableColumns = PrestodbPlanBuilder.toSchemaJson(maxSubPlan);
+            ColumnAndTableResolver columnAndTableResolver = new HiveColumnAndTableResolver(
+                    PrestodbPlanBuilder.getTableHandle(maxSubPlan), PrestodbPlanBuilder.getColumnHandle(maxSubPlan));
+            String jsonString = PrestodbPlanBuilder.toRAJsonStr(maxSubPlan, columnAndTableResolver);
+            String tableColumns = PrestodbPlanBuilder.toSchemaJson(columnAndTableResolver);
             hiveTableLayoutHandle.setSubQuery(jsonString);
             hiveTableLayoutHandle.setTableColumns(tableColumns);
             TableScanNode node = new TableScanNode(

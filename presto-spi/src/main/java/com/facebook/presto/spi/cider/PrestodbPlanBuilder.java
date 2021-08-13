@@ -11,11 +11,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.facebook.presto.hive.rule;
+package com.facebook.presto.spi.cider;
 
-import com.facebook.presto.hive.HiveColumnHandle;
-import com.facebook.presto.hive.HiveTableHandle;
 import com.facebook.presto.spi.ColumnHandle;
+import com.facebook.presto.spi.ConnectorTableHandle;
 import com.facebook.presto.spi.plan.FilterNode;
 import com.facebook.presto.spi.plan.PlanNode;
 import com.facebook.presto.spi.plan.ProjectNode;
@@ -24,9 +23,13 @@ import com.facebook.presto.spi.relation.CallExpression;
 import com.facebook.presto.spi.relation.ConstantExpression;
 import com.facebook.presto.spi.relation.RowExpression;
 import com.facebook.presto.spi.relation.VariableReferenceExpression;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mapd.plan.CiderConstantExpression;
+import com.mapd.plan.CiderExpression;
+import com.mapd.plan.CiderFilterCondition;
+import com.mapd.plan.CiderFilterNode;
+import com.mapd.plan.CiderOperatorNode;
+import com.mapd.plan.CiderTableScanNode;
+import com.mapd.plan.CiderVariableReferenceExpression;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,14 +42,15 @@ public class PrestodbPlanBuilder
 {
     private PrestodbPlanBuilder() {}
 
-    private static CiderOperatorNode buildCiderNode(ProjectNode node)
+    private static CiderOperatorNode buildCiderNode(ProjectNode node,
+            ColumnAndTableResolver columnAndTableResolver)
     {
         //TODO
         throw new RuntimeException("Unsupported operator");
     }
 
-    // TODO vMap should be passing-in in execution?
-    private static CiderOperatorNode buildCiderNode(FilterNode node, Map<VariableReferenceExpression, ColumnHandle> vMap)
+    private static CiderOperatorNode buildCiderNode(FilterNode node,
+            ColumnAndTableResolver ctr)
     {
         List<CiderExpression> ciderExpressionList = new ArrayList<>();
         if (node.getPredicate() instanceof CallExpression) {
@@ -59,12 +63,7 @@ public class PrestodbPlanBuilder
                 }
                 else if (r instanceof VariableReferenceExpression) {
                     VariableReferenceExpression v = (VariableReferenceExpression) r;
-                    if (vMap == null) {
-                        // vMap should be single time created per table source
-                        vMap = getColumnHandle(node);
-                    }
-                    ColumnHandle ch = vMap.get(v);
-                    int columnInx = (ch instanceof HiveColumnHandle) ? ((HiveColumnHandle) ch).getHiveColumnIndex() : 0;
+                    int columnInx = ctr.getColumnIndexByColumnHandle(v);
                     ciderExpressionList.add(new CiderVariableReferenceExpression(columnInx, v.getType().getDisplayName()));
                 }
                 else {
@@ -75,50 +74,43 @@ public class PrestodbPlanBuilder
             CiderFilterCondition filterCondition = new CiderFilterCondition(
                     callExpress.getDisplayName(), callExpress.getType().toString(), ciderExpressionList);
             CiderOperatorNode n = new CiderFilterNode(filterCondition);
-            n.registerChildren(toRAJsonStrHelper(node.getSource(), vMap));
+            n.registerChildren(toRAJsonStrHelper(node.getSource(), ctr));
             return n;
         }
         //FIXME need to split plan if we couldn't support
         throw new RuntimeException("Unsupported operator");
     }
 
-    private static CiderOperatorNode buildCiderNode(TableScanNode node, Map<VariableReferenceExpression, ColumnHandle> vMap)
+    private static CiderOperatorNode buildCiderNode(ColumnAndTableResolver ctr)
     {
-        if (vMap == null) {
-            // vMap should be single time created per table source
-            vMap = getColumnHandle(node);
-        }
-        if (node.getTable().getConnectorHandle() instanceof HiveTableHandle) {
-            HiveTableHandle hth = (HiveTableHandle) node.getTable().getConnectorHandle();
-            List<String> fieldsName = new ArrayList<>();
-            for (VariableReferenceExpression r : vMap.keySet()) {
-                fieldsName.add(r.getName());
-            }
-            return new CiderTableScanNode(hth.getSchemaName(), hth.getTableName(), fieldsName);
-        }
-        //FIXME need to split plan if we couldn't support
-        throw new RuntimeException("Unsupported operator");
+        return new CiderTableScanNode(ctr.getSchema(), ctr.getTableName(), ctr.getFields());
     }
 
-    private static CiderOperatorNode toRAJsonStrHelper(PlanNode planNode, Map<VariableReferenceExpression, ColumnHandle> vMap)
+    private static CiderOperatorNode toRAJsonStrHelper(PlanNode planNode,
+            ColumnAndTableResolver ctr)
     {
         if (planNode instanceof ProjectNode) {
-            return buildCiderNode((ProjectNode) planNode);
+            return buildCiderNode((ProjectNode) planNode, ctr);
         }
         else if (planNode instanceof FilterNode) {
-            return buildCiderNode((FilterNode) planNode, vMap);
+            return buildCiderNode((FilterNode) planNode, ctr);
         }
         else if (planNode instanceof TableScanNode) {
-            return buildCiderNode((TableScanNode) planNode, vMap);
+            return buildCiderNode(ctr);
         }
         //FIXME
         throw new RuntimeException("Unsupported operator");
     }
 
-    private static Map<VariableReferenceExpression, ColumnHandle> getColumnHandle(
+    public static Map<VariableReferenceExpression, ColumnHandle> getColumnHandle(
             PlanNode node)
     {
         return getSourceNode(node).getAssignments();
+    }
+
+    public static ConnectorTableHandle getTableHandle(PlanNode node)
+    {
+        return getSourceNode(node).getTable().getConnectorHandle();
     }
 
     private static TableScanNode getSourceNode(
@@ -137,23 +129,15 @@ public class PrestodbPlanBuilder
         return ((TableScanNode) node);
     }
 
-    public static String toSchemaJson(PlanNode planNode)
+    public static String toSchemaJson(ColumnAndTableResolver columnAndTableResolver)
     {
-        ObjectMapper objectMapper = new ObjectMapper();
-        ObjectNode rootNode = objectMapper.createObjectNode();
-        ArrayNode columns = objectMapper.createArrayNode();
-        TableScanNode source = getSourceNode(planNode);
-        for (VariableReferenceExpression r : source.getAssignments().keySet()) {
-            columns.add(r.getName());
-        }
-        rootNode.put("Table", ((HiveTableHandle) source.getTable().getConnectorHandle()).getTableName());
-        rootNode.set("Columns", columns);
-        return rootNode.toString();
+        return ((CiderTableScanNode) buildCiderNode(columnAndTableResolver)).toSchemaStr();
     }
 
     // DFS visitor, TODO unsupporrted plan should return as fallback
-    public static String toRAJsonStr(PlanNode planNode)
+    public static String toRAJsonStr(PlanNode planNode,
+            ColumnAndTableResolver columnAndTableResolver)
     {
-        return toRAJsonStrHelper(planNode, null).toRAJson();
+        return toRAJsonStrHelper(planNode, columnAndTableResolver).toRAJson();
     }
 }

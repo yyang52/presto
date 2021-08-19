@@ -15,6 +15,8 @@ package com.facebook.presto.common;
 
 import com.facebook.presto.common.block.Block;
 import com.facebook.presto.common.block.BlockBuilder;
+import com.facebook.presto.common.block.IntArrayBlock;
+import com.facebook.presto.common.block.LongArrayBlock;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
@@ -59,26 +61,26 @@ public class PageConvertor
             Block block = page.getBlock(i);
             long bufferSize = block.getSizeInBytes();
             dataBuffers[i] = _UNSAFE.allocateMemory(bufferSize);
-            if (types[i].equals(INT_TYPE_)) {
+            if (block instanceof IntArrayBlock && types[i].equals(INT_TYPE_)) {
                 sizeForEachBlock[i] = 4;
                 for (int j = 0; j < positionCount; j++) {
                     _UNSAFE.putInt(dataBuffers[i] + j * sizeForEachBlock[i], block.getInt(j));
                 }
             }
-            else if (types[i].equals(LONG_TYPE_)) {
+            else if (block instanceof LongArrayBlock && types[i].equals(LONG_TYPE_)) {
                 sizeForEachBlock[i] = 8;
                 for (int j = 0; j < positionCount; j++) {
                     _UNSAFE.putLong(dataBuffers[i] + j * sizeForEachBlock[i], block.getLong(j));
                 }
             }
-            else if (types[i].equals(DOUBLE_TYPE_)) {
+            else if (block instanceof LongArrayBlock && types[i].equals(DOUBLE_TYPE_)) {
                 sizeForEachBlock[i] = 8;
                 for (int j = 0; j < positionCount; j++) {
                     _UNSAFE.putDouble(dataBuffers[i] + j * sizeForEachBlock[i], longBitsToDouble(block.getLong(j)));
                 }
             }
             else {
-                throw new UnsupportedOperationException("block type " + block.getClass().getName() + " not supported!!");
+                throw new UnsupportedOperationException("data type " + types[i] + " not supported!!");
             }
         }
 

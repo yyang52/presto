@@ -46,7 +46,7 @@ public class TestPageConvertor
     }
 
     @Test
-    public void testdOUBLE()
+    public void testDouble()
     {
         int entries = 10;
         String[] types = {"Double", "Double", "Double"};
